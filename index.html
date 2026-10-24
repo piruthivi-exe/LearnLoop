@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LearnLoop</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 0 auto; padding: 16px; background: #f7f7f5; color: #222; }
+  h1 { margin-bottom: 4px; }
+  .card { background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin: 12px 0; }
+  button { padding: 10px 16px; border: 0; border-radius: 8px; background: #534ab7; color: #fff; font-size: 16px; cursor: pointer; }
+  input[type=text] { width: 100%; padding: 10px; font-size: 16px; box-sizing: border-box; margin: 8px 0; }
+  .good { color: #0f6e56; } .bad { color: #a32d2d; }
+  .bar { background: #eee; border-radius: 6px; height: 10px; } .bar div { background: #534ab7; height: 10px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<h1>LearnLoop</h1>
+<p>Your personal study coach.</p>
+
+<div class="card">
+  <h3>1. Upload notes (PDF or .txt)</h3>
+  <input type="file" id="file">
+  <button onclick="upload()">Upload</button>
+  <p id="uploadMsg"></p>
+</div>
+
+<div class="card">
+  <h3>2. Quiz</h3>
+  <button onclick="loadQuiz()">New question</button>
+  <p id="topic"></p>
+  <p id="question"></p>
+  <input type="text" id="answerBox" placeholder="Type the missing word">
+  <button onclick="submitAnswer()">Check</button>
+  <p id="result"></p>
+</div>
+
+<div class="card">
+  <h3>3. Weak topics</h3>
+  <button onclick="loadProgress()">Refresh</button>
+  <div id="progress"></div>
+</div>
+
+<script>
+let current = null;
+
+async function upload() {
+  const f = document.getElementById("file").files[0];
+  if (!f) { document.getElementById("uploadMsg").textContent = "Choose a file first."; return; }
+  const form = new FormData();
+  form.append("file", f);
+  const r = await fetch("/api/upload", { method: "POST", body: form });
+  const data = await r.json();
+  document.getElementById("uploadMsg").textContent = data.topics_added + " topics added.";
+}
+
+async function loadQuiz() {
+  const r = await fetch("/api/quiz");
+  const data = await r.json();
+  if (data.error) { document.getElementById("question").textContent = data.error; return; }
+  current = data;
+  document.getElementById("topic").textContent = "Topic: " + data.topic;
+  document.getElementById("question").textContent = data.question;
+  document.getElementById("answerBox").value = "";
+  document.getElementById("result").textContent = "";
+}
+
+async function submitAnswer() {
+  if (!current) return;
+  const given = document.getElementById("answerBox").value;
+  const r = await fetch("/api/answer", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ topic_id: current.topic_id, given: given, expected: current.answer })
+  });
+  const data = await r.json();
+  const el = document.getElementById("result");
+  el.className = data.correct ? "good" : "bad";
+  el.textContent = data.correct ? "Correct!" : "Not quite. Answer: " + current.answer;
+}
+
+async function loadProgress() {
+  const r = await fetch("/api/progress");
+  const rows = await r.json();
+  const box = document.getElementById("progress");
+  box.innerHTML = rows.length ? "" : "Answer some questions first.";
+  rows.forEach(row => {
+    box.innerHTML += "<p>" + row.topic + " — " + row.accuracy + "% (" + row.attempts + " tries)" +
+      '<div class="bar"><div style="width:' + row.accuracy + '%"></div></div></p>';
+  });
+}
+</script>
+</body>
+</html>
